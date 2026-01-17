@@ -9,6 +9,7 @@ BELKA-BERT leverages pre-trained language models (specifically ChemBERTa) adapte
 - **Domain-specific MLM pretraining** on BELKA dataset molecules
 - **Hybrid models** combining SMILES embeddings with molecular fingerprints
 - **Fine-tuning approaches** with and without masked language modeling (MLM)
+- **Systematic ablation studies** isolating contributions of each component
 - **Multi-target prediction** with three protein targets: BRD4, HSA, and sEH
 
 ## Datasets
@@ -115,6 +116,43 @@ State-of-the-art hybrid approach combining multiple modalities.
 - Early stopping with patience
 - FP16 mixed precision training
 - Output directory management for experiment tracking
+
+#### 5. **BELKA_BERT-Ablation_Redesign.ipynb** (Latest)
+
+Comprehensive ablation study isolating individual component contributions.
+
+**Key features:**
+
+- **Systematic ablations** of 8 variants covering:
+  - Full method (reference): MLM + FP + BB + fine-tuning
+  - Component removal: w/o_DAPT, w/o_FP, w/o_BB, w/o_FT
+  - Loss components: w/o_pos_weight, w/o_promisc_reg
+  - Baseline: SMILES_only (MLM without auxiliary inputs)
+- **Runtime-aware configuration** with capped MLM steps and eval samples
+- **Leakage-safe splitting** using building block triplets (identical to Hybrid-Final)
+- **Temperature scaling** and precision-based threshold selection
+- **Hallucination metrics** to track spurious multi-target predictions
+- **Calibration analysis** (ECE, Brier score)
+- **Comparative results**: Delta analysis vs SMILES-only baseline
+- **Multi-seed support** for mean±std reporting (default: seed=42)
+
+**Configuration:**
+
+```
+- Base model: seyonec/ChemBERTa-zinc-base-v1 or MLM checkpoint
+- MLM steps: 5,000 (fixed for runtime consistency)
+- MLM sample max: 250,000
+- Fine-tune phases: Head-only (1 epoch, ≤1200 steps) + Encoder (3 epochs, ≤1200 steps)
+- Batch size: 32
+- Two-phase learning rates: lr_head=2e-3, lr_encoder=3e-5
+- Anti-hallucination: lambda_promiscuity=0.05, target_precision=0.90
+```
+
+**Outputs:**
+
+- `ablation_results.jsonl` - Per-run detailed metrics
+- `ablation_results.csv` - Aggregated results with seed averaging
+- Component contribution analysis and delta metrics vs baseline
 
 ## Key Technologies
 
@@ -228,11 +266,30 @@ The notebooks include comprehensive evaluation:
 - **Precision-driven:** Thresholds predictions based on target precision
 - **Well-calibrated:** Includes calibration curves and confidence analysis
 
+### Ablation Study Findings (BELKA_BERT-Ablation_Redesign):
+
+The ablation analysis reveals component contributions through systematic removal:
+
+- **DAPT/MLM**: Domain-adaptive pretraining improves test AP and calibration
+- **Fingerprints (FP)**: Structural information boosts performance, especially for harder targets
+- **Building Blocks (BB)**: Provides moderate improvement; less critical than FP
+- **Fine-tuning (FT)**: Essential for reaching competitive AP scores
+- **Positive weighting**: Handles class imbalance effectively
+- **Promiscuity regularization**: Reduces spurious multi-target hallucinations
+- **Baseline comparison**: SMILES-only (MLM) establishes reference for delta metrics
+
+Results saved to `ablation_results.csv` with mean±std across seeds and delta analysis vs SMILES-only baseline.
+
 ## Output
 
 Models and results are typically saved to:
 
 - `runs_mlm_hybrid_paper/` - Hybrid model outputs (BELKA-BERT-Hybrid-Final)
+- `ablation_q1_aligned/` - Ablation study outputs (BELKA_BERT-Ablation_Redesign)
+  - `ablation_results.jsonl` - Per-run metrics
+  - `ablation_results.csv` - Aggregated results with seed averaging
+  - `fp_cache/` - Cached molecular fingerprints
+  - `canonicalized.parquet` - Canonicalized SMILES
 - `ckpt_mlm_belka/` - MLM pretraining checkpoints
 - Various CSV/pickle files with predictions and metrics
 
